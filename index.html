@@ -172,13 +172,13 @@
 
     <script>
         // --- CONFIGURAZIONE GITHUB ---
-        // INSERISCI QUI IL TUO NOME UTENTE E IL NOME DEL REPOSITORY
-        const GITHUB_REPO_OWNER = "tuo-nome-utente"; 
-        const GITHUB_REPO_NAME = "lyrics-app";
+        const GITHUB_REPO_OWNER = "fabiusai"; 
+        const GITHUB_REPO_NAME = "lyrics";
         const GITHUB_FILE_PATH = "data.json";
+        const GITHUB_BRANCH = "main"; // Forza l'uso del branch main
 
         let currentFileSha = ""; 
-        let appData = { tracks: [] }; // Struttura base: un array di brani
+        let appData = { tracks: [] }; 
         let githubToken = "";
 
         // Gestione Navigazione
@@ -188,16 +188,13 @@
 
         // --- INIZIALIZZAZIONE ---
         window.onload = () => {
-            // 1. Controlla URL per il token
             const urlParams = new URLSearchParams(window.location.search);
             const tokenFromUrl = urlParams.get('token');
             if (tokenFromUrl) {
                 localStorage.setItem('gh_lyrics_token', tokenFromUrl);
-                // Pulisce l'URL senza ricaricare la pagina
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            // 2. Controlla LocalStorage
             githubToken = localStorage.getItem('gh_lyrics_token');
             if (githubToken) {
                 loadDataFromGitHub(githubToken);
@@ -215,7 +212,6 @@
                 historyStack.push(viewId);
             }
 
-            // Gestione bottoni Header
             const btnBack = document.getElementById('btnBack');
             const btnAddTop = document.getElementById('btnAddTop');
             const appTitle = document.getElementById('appTitle');
@@ -236,8 +232,8 @@
 
         function goBack() {
             if (historyStack.length > 1) {
-                historyStack.pop(); // Rimuove la vista corrente
-                const prevView = historyStack.pop(); // Prende la precedente
+                historyStack.pop(); 
+                const prevView = historyStack.pop(); 
                 showView(prevView);
             } else {
                 showView('homeView');
@@ -260,29 +256,29 @@
             }
         }
 
-        // --- FUNZIONI LETTURA/SCRITTURA GITHUB (Boilerplate Adattato) ---
+        // --- FUNZIONI LETTURA/SCRITTURA GITHUB ---
         async function loadDataFromGitHub(token) {
             showLoader(true);
             try {
-                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}`, {
+                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
                     headers: { 'Authorization': `token ${token}` }
                 });
                 
                 if (!res.ok) {
-                    console.warn("File non trovato. Inizializzo dati vuoti.");
+                    console.warn("File non trovato nel branch main. L'API lo creerà al primo salvataggio.");
                     appData = { tracks: [] }; 
                 } else {
                     const data = await res.json();
                     currentFileSha = data.sha;
                     const decodedContent = decodeURIComponent(escape(atob(data.content)));
                     appData = JSON.parse(decodedContent);
-                    if (!appData.tracks) appData.tracks = []; // Fallback di sicurezza
+                    if (!appData.tracks) appData.tracks = [];
                 }
                 historyStack = [];
                 showView('homeView');
             } catch (error) {
                 console.error("Errore di caricamento:", error);
-                alert("Errore caricamento dati. Verifica il Token e i nomi di Utente/Repository.");
+                alert("Errore caricamento dati: " + error.message);
                 localStorage.removeItem('gh_lyrics_token');
                 showView('loginView');
             }
@@ -297,7 +293,8 @@
 
                 const payload = {
                     message: "Aggiornamento brani da Web App",
-                    content: contentEncoded
+                    content: contentEncoded,
+                    branch: GITHUB_BRANCH // Forza il salvataggio sul branch main
                 };
 
                 if (currentFileSha) payload.sha = currentFileSha;
@@ -314,21 +311,21 @@
                 if (res.ok) {
                     const data = await res.json();
                     currentFileSha = data.content.sha;
-                    alert("Salvataggio completato!");
+                    alert("Salvataggio completato con successo!");
                     showView('homeView');
                 } else {
-                    throw new Error("Errore nel salvataggio su GitHub");
+                    const errorData = await res.json();
+                    throw new Error(errorData.message || "Errore sconosciuto");
                 }
             } catch (error) {
                 console.error(error);
-                alert("Errore durante il salvataggio.");
+                alert("ERRORE GITHUB: " + error.message + "\n\nSe l'errore è 'Not Found' o 'Bad credentials', verifica di aver creato il Token con la spunta su 'repo'!");
             }
             showLoader(false);
         }
 
         // --- LOGICA RENDER APP ---
         function getAlbumsMap() {
-            // Raggruppa i brani per disco in base ad "album" e "artist"
             const map = {};
             appData.tracks.forEach(track => {
                 const key = track.album + "|||" + track.artist;
@@ -426,12 +423,10 @@
                     `;
                     container.appendChild(pairDiv);
                 } else {
-                    // Mantiene gli spazi vuoti tra le strofe
                     pairDiv.innerHTML = `<div style="height:25px;"></div>`;
                     container.appendChild(pairDiv);
                 }
             }
-
             showView('readerView');
         }
 
@@ -444,7 +439,6 @@
             resultsDiv.innerHTML = "Ricerca in corso...";
             
             try {
-                // API ufficiale iTunes
                 const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`);
                 const data = await res.json();
                 
@@ -464,9 +458,8 @@
                         document.getElementById('editArtist').value = song.artistName;
                         document.getElementById('editAlbum').value = song.collectionName;
                         document.getElementById('editTitle').value = song.trackName;
-                        // Prende la copertina ad alta risoluzione cambiando URL
                         document.getElementById('editCover').value = song.artworkUrl100.replace('100x100bb', '600x600bb');
-                        resultsDiv.innerHTML = "<span style='color:var(--accent);'>Dati compilati automaticamente!</span>";
+                        resultsDiv.innerHTML = "<span style='color:var(--accent);'>Dati compilati!</span>";
                     };
                     resultsDiv.appendChild(btn);
                 });
@@ -489,13 +482,12 @@
             }
 
             const newTrack = {
-                id: Date.now().toString(), // ID univoco
+                id: Date.now().toString(),
                 artist, album, title, cover, en, it
             };
 
             appData.tracks.push(newTrack);
             
-            // Pulisce i campi per il prossimo inserimento
             document.getElementById('editArtist').value = '';
             document.getElementById('editAlbum').value = '';
             document.getElementById('editTitle').value = '';
@@ -519,7 +511,7 @@
 
         function deleteCurrentAlbum() {
             if(!currentAlbumSelection) return;
-            if(confirm("Sei sicuro di voler eliminare l'INTERO DISCO e tutti i suoi brani?")) {
+            if(confirm("Sei sicuro di voler eliminare l'INTERO DISCO?")) {
                 const [album, artist] = currentAlbumSelection.split("|||");
                 appData.tracks = appData.tracks.filter(t => !(t.album === album && t.artist === artist));
                 saveDataToGitHub();
