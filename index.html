@@ -13,6 +13,7 @@
             --text-it: #ffca28;
             --accent: #1db954;
             --danger: #ff4444;
+            --share: #2b78e4;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -22,6 +23,11 @@
             color: var(--text-main);
             padding-bottom: 80px; 
         }
+
+        /* MODALITA' LETTURA (Amici) */
+        .read-only-mode .admin-only { display: none !important; }
+        .admin-login-btn { display: none; }
+        .read-only-mode .admin-login-btn { display: block; margin-top: 40px; background: transparent; color: #888; border: 1px solid #444; }
 
         header {
             background-color: var(--surface-color);
@@ -72,6 +78,7 @@
         button:active { opacity: 0.8; }
         button.secondary { background-color: #333; }
         button.danger { background-color: var(--danger); }
+        button.share { background-color: var(--share); }
         button.small { width: auto; padding: 10px 15px; font-size: 1rem; }
 
         input, textarea {
@@ -113,26 +120,30 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.2</span>
+            <span class="app-version">v1.3</span>
         </div>
-        <button class="small secondary" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
+        <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
 
     <div id="loader">Attendere prego...</div>
 
-    <!-- VISTA 1: LOGIN -->
+    <!-- VISTA 1: LOGIN (Mostrata solo manualmente o se forzata) -->
     <div id="loginView" class="view container">
-        <h2>Imposta Token GitHub</h2>
-        <p style="margin-top:10px; color:#aaa; font-size:1.1rem;">Inserisci il tuo Personal Access Token.</p>
+        <h2>Accesso Autore</h2>
+        <p style="margin-top:10px; color:#aaa; font-size:1.1rem;">Inserisci il tuo Personal Access Token per poter modificare il database.</p>
         <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxx">
         <button onclick="saveTokenAndStart()">Salva e Accedi</button>
+        <button class="secondary" onclick="goBack()" style="margin-top: 15px;">Annulla</button>
     </div>
 
     <!-- VISTA 2: LISTA ARTISTI (Home) -->
     <div id="homeView" class="view container">
-        <button onclick="prepareNewTrack()" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
+        <button class="admin-only" onclick="prepareNewTrack()" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
         <input type="text" id="localSearchQuery" placeholder="🔍 Cerca artista, disco o brano..." onkeyup="renderHome()">
         <div id="artistsList" style="margin-top: 20px;"></div>
+        
+        <!-- Appare solo in modalità lettura -->
+        <button class="admin-login-btn" onclick="showView('loginView')">🔒 Accesso Autore (Login)</button>
     </div>
 
     <!-- VISTA 3: LISTA DISCHI DELL'ARTISTA -->
@@ -150,20 +161,25 @@
                 <p id="currentAlbumArtist" style="font-size:1.2rem; color:#aaa;">Artista</p>
             </div>
         </div>
-        <button class="secondary small" onclick="fixAlbumTrackNumbers()" style="margin-bottom: 15px; width: 100%;">🔄 Riordina da iTunes</button>
-        <div id="tracksList"></div>
-        <button class="danger" onclick="deleteCurrentAlbum()" style="margin-top: 30px;">🗑️ Elimina intero disco</button>
+        
+        <button class="share small" onclick="shareAlbum()" style="margin-bottom: 15px; width: 100%;">🔗 Condividi Disco</button>
+        <button class="secondary small admin-only" onclick="fixAlbumTrackNumbers()" style="margin-bottom: 15px; width: 100%;">🔄 Riordina da iTunes</button>
+        
+        <div id="tracksList" style="margin-top: 20px;"></div>
+        <button class="danger admin-only" onclick="deleteCurrentAlbum()" style="margin-top: 30px;">🗑️ Elimina intero disco</button>
     </div>
 
     <!-- VISTA 5: LETTORE TESTO -->
     <div id="readerView" class="view container">
         <h2 id="readerTitle" style="margin-bottom: 5px; font-size:1.6rem;">Titolo</h2>
         <p id="readerSubtitle" style="margin-bottom: 15px; color:#aaa; font-size:1.2rem;">Artista</p>
-        <div style="display:flex; gap:10px; margin-bottom:30px;">
+        
+        <div class="admin-only" style="display:flex; gap:10px; margin-bottom:30px;">
             <button class="secondary small" style="width: 50%;" onclick="editCurrentTrack()">✏️ Modifica Brano</button>
             <button class="danger small" style="width: 50%;" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
         </div>
-        <div id="lyricsContainer"></div>
+        
+        <div id="lyricsContainer" style="margin-top: 20px;"></div>
     </div>
 
     <!-- VISTA 6: EDITOR / RICERCA -->
@@ -213,19 +229,23 @@
         let currentAlbumSelection = "";
         let currentTrackSelection = null;
 
+        // --- INIZIALIZZAZIONE & GESTIONE URL ---
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const tokenFromUrl = urlParams.get('token');
+            const albumFromUrl = urlParams.get('album');
+            
+            // Gestione Token sicuro
             if (tokenFromUrl) {
                 localStorage.setItem('gh_lyrics_token', tokenFromUrl);
-                window.history.replaceState({}, document.title, window.location.pathname);
+                // Pulisce il token dall'URL ma preserva l'album da condividere se presente
+                let cleanUrl = window.location.pathname;
+                if(albumFromUrl) cleanUrl += '?album=' + encodeURIComponent(albumFromUrl);
+                window.history.replaceState({}, document.title, cleanUrl);
             }
+            
             githubToken = localStorage.getItem('gh_lyrics_token');
-            if (githubToken) {
-                loadDataFromGitHub(githubToken);
-            } else {
-                showView('loginView');
-            }
+            loadDataFromGitHub(githubToken, albumFromUrl);
         };
 
         function showView(viewId, pushHistory = true) {
@@ -244,14 +264,16 @@
                 btnBack.style.visibility = 'hidden';
                 btnBack.style.display = 'block';
                 btnAddTop.style.display = 'block';
-                btnAddTop.style.visibility = 'visible';
                 appTitle.innerText = "I Miei Artisti";
                 renderHome();
+            } else if (viewId === 'loginView') {
+                btnBack.style.visibility = 'hidden';
+                btnAddTop.style.display = 'none';
+                appTitle.innerText = "Login";
             } else {
                 btnBack.style.display = 'block';
                 btnBack.style.visibility = 'visible';
-                btnAddTop.style.visibility = 'hidden';
-                btnAddTop.style.display = 'block';
+                btnAddTop.style.display = 'none';
                 if(viewId === 'artistView') appTitle.innerText = "Dischi Artista";
                 if(viewId === 'albumView') appTitle.innerText = "Brani Disco";
                 if(viewId === 'readerView') appTitle.innerText = "Lettura Testo";
@@ -271,37 +293,6 @@
 
         function showLoader(show) { document.getElementById('loader').style.display = show ? 'block' : 'none'; }
 
-        function prepareNewTrack() {
-            document.getElementById('editId').value = '';
-            document.getElementById('editArtist').value = currentArtistSelection || '';
-            document.getElementById('editAlbum').value = currentAlbumSelection ? currentAlbumSelection.split("|||")[0] : '';
-            document.getElementById('editTitle').value = '';
-            document.getElementById('editTrackNum').value = '';
-            document.getElementById('editYear').value = '';
-            document.getElementById('editCover').value = '';
-            document.getElementById('editEn').value = '';
-            document.getElementById('editIt').value = '';
-            document.getElementById('searchQuery').value = '';
-            document.getElementById('searchResults').innerHTML = '';
-            showView('editorView');
-        }
-
-        function editCurrentTrack() {
-            if(!currentTrackSelection) return;
-            document.getElementById('editId').value = currentTrackSelection.id;
-            document.getElementById('editArtist').value = currentTrackSelection.artist;
-            document.getElementById('editAlbum').value = currentTrackSelection.album;
-            document.getElementById('editTitle').value = currentTrackSelection.title;
-            document.getElementById('editTrackNum').value = currentTrackSelection.trackNum || '';
-            document.getElementById('editYear').value = currentTrackSelection.year || '';
-            document.getElementById('editCover').value = currentTrackSelection.cover || '';
-            document.getElementById('editEn').value = currentTrackSelection.en;
-            document.getElementById('editIt').value = currentTrackSelection.it;
-            document.getElementById('searchQuery').value = '';
-            document.getElementById('searchResults').innerHTML = '';
-            showView('editorView');
-        }
-
         function saveTokenAndStart() {
             const token = document.getElementById('tokenInput').value.trim();
             if(token) {
@@ -311,38 +302,67 @@
             } else { alert("Inserisci un token valido."); }
         }
 
-        async function loadDataFromGitHub(token) {
+        // --- LETTURA DATI: API (ADMIN) O DIRETTA (AMICI) ---
+        async function loadDataFromGitHub(token, albumToOpen = null) {
             showLoader(true);
+            
+            // Attiva la modalità Sola Lettura se non c'è il token
+            document.body.classList.toggle('read-only-mode', !token);
+            
             try {
-                const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
-                    headers: { 'Authorization': `token ${token}` }
-                });
-                if (!res.ok) {
-                    appData = { tracks: [] }; 
+                if (token) {
+                    // Chiamata API (Permette la successiva scrittura)
+                    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
+                        headers: { 'Authorization': `token ${token}` }
+                    });
+                    if (!res.ok) {
+                        appData = { tracks: [] }; 
+                    } else {
+                        const data = await res.json();
+                        currentFileSha = data.sha;
+                        const decodedContent = decodeURIComponent(escape(atob(data.content)));
+                        appData = JSON.parse(decodedContent);
+                    }
                 } else {
-                    const data = await res.json();
-                    currentFileSha = data.sha;
-                    const decodedContent = decodeURIComponent(escape(atob(data.content)));
-                    appData = JSON.parse(decodedContent);
-                    if (!appData.tracks) appData.tracks = [];
+                    // Chiamata Diretta Pubblica (Bypass API, ideale per gli amici)
+                    const res = await fetch('./data.json?t=' + Date.now());
+                    if (res.ok) {
+                        appData = await res.json();
+                    } else {
+                        console.warn("Database pubblico non trovato. Modalità vuota.");
+                        appData = { tracks: [] };
+                    }
                 }
+                
+                if (!appData.tracks) appData.tracks = [];
+                
                 historyStack = [];
                 showView('homeView');
+                
+                // Se il link conteneva un album condiviso, aprilo subito
+                if (albumToOpen) {
+                    openAlbum(albumToOpen);
+                }
+
             } catch (error) {
-                alert("Errore caricamento dati: " + error.message);
-                localStorage.removeItem('gh_lyrics_token');
-                showView('loginView');
+                console.error(error);
+                if(token) {
+                    alert("Errore di connessione API. Controlla il Token.");
+                    localStorage.removeItem('gh_lyrics_token');
+                    document.body.classList.add('read-only-mode');
+                }
             }
             showLoader(false);
         }
 
+        // --- SALVATAGGIO DATI (SOLO ADMIN) ---
         async function saveDataToGitHub() {
             showLoader(true);
             try {
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.2)",
+                    message: "Aggiornamento brani (v1.3)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -376,7 +396,6 @@
             listDiv.innerHTML = "";
             const query = (document.getElementById('localSearchQuery').value || "").toLowerCase();
             
-            // Raggruppa per artista
             const artistsMap = {};
             appData.tracks.forEach(track => {
                 if(!artistsMap[track.artist]) {
@@ -388,7 +407,7 @@
 
             let artistsArr = Object.values(artistsMap);
             if(artistsArr.length === 0) {
-                listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun brano presente. Aggiungine uno!</p>";
+                listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun brano nel database.</p>";
                 return;
             }
 
@@ -470,7 +489,7 @@
             showView('artistView');
         }
 
-        // --- RENDER DISCO (BRANI) ---
+        // --- RENDER DISCO E CONDIVISIONE ---
         function openAlbum(albumKey) {
             currentAlbumSelection = albumKey;
             const [albumTitle, albumArtist] = albumKey.split("|||");
@@ -513,6 +532,27 @@
             showView('albumView');
         }
 
+        function shareAlbum() {
+            if(!currentAlbumSelection) return;
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = baseUrl + '?album=' + encodeURIComponent(currentAlbumSelection);
+            const titleText = currentAlbumSelection.split("|||")[0] + " - " + currentAlbumSelection.split("|||")[1];
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Lyrics Reader: ' + titleText,
+                    url: shareUrl
+                }).catch(console.error);
+            } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert("Link copiato! Ora puoi incollarlo su WhatsApp o dove preferisci.");
+                }).catch(() => {
+                    prompt("Copia questo link:", shareUrl);
+                });
+            }
+        }
+
+        // --- RENDER TESTO BRANO ---
         function openReader(trackId) {
             currentTrackSelection = appData.tracks.find(t => t.id === trackId);
             if(!currentTrackSelection) return;
@@ -542,6 +582,38 @@
                 }
             }
             showView('readerView');
+        }
+
+        // --- GESTIONE EDITOR (SOLO ADMIN) ---
+        function prepareNewTrack() {
+            document.getElementById('editId').value = '';
+            document.getElementById('editArtist').value = currentArtistSelection || '';
+            document.getElementById('editAlbum').value = currentAlbumSelection ? currentAlbumSelection.split("|||")[0] : '';
+            document.getElementById('editTitle').value = '';
+            document.getElementById('editTrackNum').value = '';
+            document.getElementById('editYear').value = '';
+            document.getElementById('editCover').value = '';
+            document.getElementById('editEn').value = '';
+            document.getElementById('editIt').value = '';
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            showView('editorView');
+        }
+
+        function editCurrentTrack() {
+            if(!currentTrackSelection) return;
+            document.getElementById('editId').value = currentTrackSelection.id;
+            document.getElementById('editArtist').value = currentTrackSelection.artist;
+            document.getElementById('editAlbum').value = currentTrackSelection.album;
+            document.getElementById('editTitle').value = currentTrackSelection.title;
+            document.getElementById('editTrackNum').value = currentTrackSelection.trackNum || '';
+            document.getElementById('editYear').value = currentTrackSelection.year || '';
+            document.getElementById('editCover').value = currentTrackSelection.cover || '';
+            document.getElementById('editEn').value = currentTrackSelection.en;
+            document.getElementById('editIt').value = currentTrackSelection.it;
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            showView('editorView');
         }
 
         async function searchITunes() {
