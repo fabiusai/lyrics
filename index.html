@@ -104,7 +104,7 @@
     <header>
         <button class="small secondary" id="btnBack" style="display:none;" onclick="goBack()">◀ Indietro</button>
         <span id="appTitle">Lyrics Reader</span>
-        <button class="small secondary" id="btnAddTop" style="display:none;" onclick="showView('editorView')">➕</button>
+        <button class="small secondary" id="btnAddTop" style="display:none;" onclick="prepareNewTrack()">➕</button>
     </header>
 
     <div id="loader">Attendere prego...</div>
@@ -119,8 +119,9 @@
 
     <!-- VISTA 2: LISTA DISCHI (Home) -->
     <div id="homeView" class="view container">
-        <button onclick="showView('editorView')" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
-        <div id="albumsList"></div>
+        <button onclick="prepareNewTrack()" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
+        <input type="text" id="localSearchQuery" placeholder="🔍 Cerca artista, disco o brano..." onkeyup="renderHome()">
+        <div id="albumsList" style="margin-top: 20px;"></div>
     </div>
 
     <!-- VISTA 3: LISTA BRANI DEL DISCO -->
@@ -141,7 +142,11 @@
         <h2 id="readerTitle" style="margin-bottom: 5px; font-size:1.6rem;">Titolo</h2>
         <p id="readerSubtitle" style="margin-bottom: 25px; color:#aaa; font-size:1.2rem;">Artista</p>
         <div id="lyricsContainer"></div>
-        <button class="danger" onclick="deleteCurrentTrack()" style="margin-top: 40px;">🗑️ Elimina questo brano</button>
+        
+        <div style="display:flex; gap:10px; margin-top:40px;">
+            <button class="secondary" onclick="editCurrentTrack()">✏️ Modifica</button>
+            <button class="danger" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
+        </div>
     </div>
 
     <!-- VISTA 5: EDITOR / RICERCA -->
@@ -156,9 +161,16 @@
         <hr style="border:0; border-top:1px solid #333; margin: 20px 0;">
 
         <h2>Dati Brano</h2>
+        <input type="hidden" id="editId">
         <input type="text" id="editArtist" placeholder="Artista">
         <input type="text" id="editAlbum" placeholder="Album">
         <input type="text" id="editTitle" placeholder="Titolo Brano">
+        
+        <div style="display: flex; gap: 10px;">
+            <input type="number" id="editTrackNum" placeholder="N° Traccia" style="width: 50%;">
+            <input type="number" id="editYear" placeholder="Anno Uscita" style="width: 50%;">
+        </div>
+        
         <input type="text" id="editCover" placeholder="URL Copertina (opzionale)">
         
         <h2 style="margin-top:20px;">Testo Inglese</h2>
@@ -175,7 +187,7 @@
         const GITHUB_REPO_OWNER = "fabiusai"; 
         const GITHUB_REPO_NAME = "lyrics";
         const GITHUB_FILE_PATH = "data.json";
-        const GITHUB_BRANCH = "main"; // Forza l'uso del branch main
+        const GITHUB_BRANCH = "main";
 
         let currentFileSha = ""; 
         let appData = { tracks: [] }; 
@@ -203,7 +215,7 @@
             }
         };
 
-        // --- GESTIONE VISTE (UI) ---
+        // --- GESTIONE VISTE E PULIZIA ---
         function showView(viewId, pushHistory = true) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
@@ -226,7 +238,7 @@
                 btnAddTop.style.display = 'none';
                 if(viewId === 'albumView') appTitle.innerText = "Brani Disco";
                 if(viewId === 'readerView') appTitle.innerText = "Lettura";
-                if(viewId === 'editorView') appTitle.innerText = "Nuovo Brano";
+                if(viewId === 'editorView') appTitle.innerText = "Dati Brano";
             }
         }
 
@@ -242,6 +254,37 @@
 
         function showLoader(show) {
             document.getElementById('loader').style.display = show ? 'block' : 'none';
+        }
+
+        function prepareNewTrack() {
+            document.getElementById('editId').value = '';
+            document.getElementById('editArtist').value = '';
+            document.getElementById('editAlbum').value = '';
+            document.getElementById('editTitle').value = '';
+            document.getElementById('editTrackNum').value = '';
+            document.getElementById('editYear').value = '';
+            document.getElementById('editCover').value = '';
+            document.getElementById('editEn').value = '';
+            document.getElementById('editIt').value = '';
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            showView('editorView');
+        }
+
+        function editCurrentTrack() {
+            if(!currentTrackSelection) return;
+            document.getElementById('editId').value = currentTrackSelection.id;
+            document.getElementById('editArtist').value = currentTrackSelection.artist;
+            document.getElementById('editAlbum').value = currentTrackSelection.album;
+            document.getElementById('editTitle').value = currentTrackSelection.title;
+            document.getElementById('editTrackNum').value = currentTrackSelection.trackNum || '';
+            document.getElementById('editYear').value = currentTrackSelection.year || '';
+            document.getElementById('editCover').value = currentTrackSelection.cover || '';
+            document.getElementById('editEn').value = currentTrackSelection.en;
+            document.getElementById('editIt').value = currentTrackSelection.it;
+            document.getElementById('searchQuery').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            showView('editorView');
         }
 
         // --- LOGIN ---
@@ -294,7 +337,7 @@
                 const payload = {
                     message: "Aggiornamento brani da Web App",
                     content: contentEncoded,
-                    branch: GITHUB_BRANCH // Forza il salvataggio sul branch main
+                    branch: GITHUB_BRANCH
                 };
 
                 if (currentFileSha) payload.sha = currentFileSha;
@@ -319,12 +362,12 @@
                 }
             } catch (error) {
                 console.error(error);
-                alert("ERRORE GITHUB: " + error.message + "\n\nSe l'errore è 'Not Found' o 'Bad credentials', verifica di aver creato il Token con la spunta su 'repo'!");
+                alert("ERRORE GITHUB: " + error.message);
             }
             showLoader(false);
         }
 
-        // --- LOGICA RENDER APP ---
+        // --- LOGICA RENDER APP E ORDINAMENTO ---
         function getAlbumsMap() {
             const map = {};
             appData.tracks.forEach(track => {
@@ -334,8 +377,13 @@
                         title: track.album,
                         artist: track.artist,
                         cover: track.cover || '',
+                        year: track.year || '9999',
                         tracks: []
                     };
+                }
+                // Prende l'anno di uscita minore se presente
+                if(track.year && parseInt(track.year) < parseInt(map[key].year)) {
+                    map[key].year = track.year;
                 }
                 map[key].tracks.push(track);
             });
@@ -345,28 +393,49 @@
         function renderHome() {
             const listDiv = document.getElementById('albumsList');
             listDiv.innerHTML = "";
+            const query = (document.getElementById('localSearchQuery').value || "").toLowerCase();
             const albums = getAlbumsMap();
+            let albumsArr = Object.values(albums);
             
-            const keys = Object.keys(albums);
-            if(keys.length === 0) {
+            if(albumsArr.length === 0) {
                 listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun disco presente. Aggiungine uno!</p>";
                 return;
             }
 
-            keys.forEach(key => {
-                const alb = albums[key];
+            // Ordina per anno (crescente) e poi per artista
+            albumsArr.sort((a, b) => {
+                if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year);
+                return a.artist.localeCompare(b.artist);
+            });
+
+            let found = 0;
+            albumsArr.forEach(alb => {
+                // Filtro Ricerca
+                const matchAlbum = alb.title.toLowerCase().includes(query);
+                const matchArtist = alb.artist.toLowerCase().includes(query);
+                const matchTrack = alb.tracks.some(t => t.title.toLowerCase().includes(query));
+
+                if (query && !matchAlbum && !matchArtist && !matchTrack) return;
+
+                found++;
                 const div = document.createElement('div');
                 div.className = 'list-item';
+                const yearBadge = alb.year !== '9999' ? `(${alb.year})` : '';
+                
                 div.innerHTML = `
                     <img src="${alb.cover || 'https://via.placeholder.com/150/333333/FFFFFF?text=No+Cover'}" alt="Cover">
                     <div class="list-item-info">
-                        <h2>${alb.title}</h2>
+                        <h2>${alb.title} <span style="font-size:1rem; color:#aaa;">${yearBadge}</span></h2>
                         <p>${alb.artist} • ${alb.tracks.length} brani</p>
                     </div>
                 `;
-                div.onclick = () => openAlbum(key);
+                div.onclick = () => openAlbum(alb.title + "|||" + alb.artist);
                 listDiv.appendChild(div);
             });
+
+            if (found === 0) {
+                listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun risultato trovato nel database.</p>";
+            }
         }
 
         function openAlbum(albumKey) {
@@ -375,17 +444,26 @@
             
             document.getElementById('currentAlbumCover').src = alb.cover || 'https://via.placeholder.com/150/333333/FFFFFF?text=No+Cover';
             document.getElementById('currentAlbumTitle').innerText = alb.title;
-            document.getElementById('currentAlbumArtist').innerText = alb.artist;
+            const yearBadge = alb.year !== '9999' ? `(${alb.year})` : '';
+            document.getElementById('currentAlbumArtist').innerText = `${alb.artist} ${yearBadge}`;
 
             const listDiv = document.getElementById('tracksList');
             listDiv.innerHTML = "";
             
+            // Ordina i brani del disco in base al trackNum (se disponibile)
+            alb.tracks.sort((a, b) => {
+                const numA = parseInt(a.trackNum) || 999;
+                const numB = parseInt(b.trackNum) || 999;
+                return numA - numB;
+            });
+
             alb.tracks.forEach(track => {
                 const div = document.createElement('div');
                 div.className = 'list-item';
+                const prefix = track.trackNum ? `${track.trackNum}. ` : '';
                 div.innerHTML = `
-                    <div class="list-item-info">
-                        <h2 style="font-size: 1.3rem;">${track.title}</h2>
+                    <div class="list-item-info" style="width: 100%;">
+                        <h2 style="font-size: 1.3rem;">${prefix}${track.title}</h2>
                     </div>
                 `;
                 div.onclick = () => openReader(track.id);
@@ -399,7 +477,8 @@
             currentTrackSelection = appData.tracks.find(t => t.id === trackId);
             if(!currentTrackSelection) return;
 
-            document.getElementById('readerTitle').innerText = currentTrackSelection.title;
+            const prefix = currentTrackSelection.trackNum ? `${currentTrackSelection.trackNum}. ` : '';
+            document.getElementById('readerTitle').innerText = prefix + currentTrackSelection.title;
             document.getElementById('readerSubtitle').innerText = `${currentTrackSelection.artist} • ${currentTrackSelection.album}`;
 
             const container = document.getElementById('lyricsContainer');
@@ -458,6 +537,8 @@
                         document.getElementById('editArtist').value = song.artistName;
                         document.getElementById('editAlbum').value = song.collectionName;
                         document.getElementById('editTitle').value = song.trackName;
+                        document.getElementById('editTrackNum').value = song.trackNumber || '';
+                        document.getElementById('editYear').value = song.releaseDate ? song.releaseDate.substring(0,4) : '';
                         document.getElementById('editCover').value = song.artworkUrl100.replace('100x100bb', '600x600bb');
                         resultsDiv.innerHTML = "<span style='color:var(--accent);'>Dati compilati!</span>";
                     };
@@ -469,9 +550,12 @@
         }
 
         function saveTrack() {
+            const id = document.getElementById('editId').value;
             const artist = document.getElementById('editArtist').value.trim();
             const album = document.getElementById('editAlbum').value.trim();
             const title = document.getElementById('editTitle').value.trim();
+            const trackNum = document.getElementById('editTrackNum').value.trim();
+            const year = document.getElementById('editYear').value.trim();
             const cover = document.getElementById('editCover').value.trim();
             const en = document.getElementById('editEn').value;
             const it = document.getElementById('editIt').value;
@@ -481,21 +565,20 @@
                 return;
             }
 
-            const newTrack = {
-                id: Date.now().toString(),
-                artist, album, title, cover, en, it
-            };
-
-            appData.tracks.push(newTrack);
-            
-            document.getElementById('editArtist').value = '';
-            document.getElementById('editAlbum').value = '';
-            document.getElementById('editTitle').value = '';
-            document.getElementById('editCover').value = '';
-            document.getElementById('editEn').value = '';
-            document.getElementById('editIt').value = '';
-            document.getElementById('searchQuery').value = '';
-            document.getElementById('searchResults').innerHTML = '';
+            if (id) {
+                // Aggiornamento brano esistente
+                const idx = appData.tracks.findIndex(t => t.id === id);
+                if (idx !== -1) {
+                    appData.tracks[idx] = { id, artist, album, title, trackNum, year, cover, en, it };
+                }
+            } else {
+                // Creazione nuovo brano
+                const newTrack = {
+                    id: Date.now().toString(),
+                    artist, album, title, trackNum, year, cover, en, it
+                };
+                appData.tracks.push(newTrack);
+            }
 
             saveDataToGitHub();
         }
