@@ -25,7 +25,7 @@
 
         header {
             background-color: var(--surface-color);
-            padding: 15px;
+            padding: 10px 15px;
             text-align: center;
             font-size: 1.5rem;
             font-weight: bold;
@@ -36,6 +36,20 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .header-title-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .app-version {
+            font-size: 0.8rem;
+            color: #888;
+            font-weight: normal;
+            margin-top: 2px;
         }
 
         .container { padding: 20px; }
@@ -102,12 +116,12 @@
 <body>
 
     <header>
-        <button class="small secondary" id="btnBack" style="display:none;" onclick="goBack()">◀ Indietro</button>
-        <div style="display: flex; flex-direction: column; align-items: center;">
+        <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
+        <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span style="font-size: 0.7rem; color: #888; font-weight: normal;">v1.1</span>
+            <span class="app-version">v1.1</span>
         </div>
-        <button class="small secondary" id="btnAddTop" style="display:none;" onclick="prepareNewTrack()">➕</button>
+        <button class="small secondary" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
 
     <div id="loader">Attendere prego...</div>
@@ -137,6 +151,7 @@
             </div>
         </div>
         
+        <!-- Bottone per riordinare da iTunes -->
         <button class="secondary small" onclick="fixAlbumTrackNumbers()" style="margin-bottom: 15px; width: 100%;">🔄 Riordina da iTunes</button>
         
         <div id="tracksList"></div>
@@ -148,10 +163,10 @@
         <h2 id="readerTitle" style="margin-bottom: 5px; font-size:1.6rem;">Titolo</h2>
         <p id="readerSubtitle" style="margin-bottom: 15px; color:#aaa; font-size:1.2rem;">Artista</p>
         
-        <!-- Pulsanti Spostati in Alto per Immediata Visibilità -->
+        <!-- Pulsanti di Modifica/Eliminazione Brano -->
         <div style="display:flex; gap:10px; margin-bottom:30px;">
-            <button class="secondary small" onclick="editCurrentTrack()">✏️ Modifica Brano</button>
-            <button class="danger small" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
+            <button class="secondary small" style="width: 50%;" onclick="editCurrentTrack()">✏️ Modifica Brano</button>
+            <button class="danger small" style="width: 50%;" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
         </div>
 
         <div id="lyricsContainer"></div>
@@ -236,16 +251,21 @@
             const btnAddTop = document.getElementById('btnAddTop');
             const appTitle = document.getElementById('appTitle');
 
+            // Imposta la visibilità dei tasti Header
             if (viewId === 'homeView') {
-                btnBack.style.display = 'none';
+                btnBack.style.visibility = 'hidden';
+                btnBack.style.display = 'block'; // Manteniamo lo spazio per centrare il titolo
                 btnAddTop.style.display = 'block';
+                btnAddTop.style.visibility = 'visible';
                 appTitle.innerText = "I Miei Dischi";
                 renderHome();
             } else {
                 btnBack.style.display = 'block';
-                btnAddTop.style.display = 'none';
+                btnBack.style.visibility = 'visible';
+                btnAddTop.style.visibility = 'hidden';
+                btnAddTop.style.display = 'block'; // Manteniamo lo spazio
                 if(viewId === 'albumView') appTitle.innerText = "Brani Disco";
-                if(viewId === 'readerView') appTitle.innerText = "Lettura";
+                if(viewId === 'readerView') appTitle.innerText = "Lettura Testo";
                 if(viewId === 'editorView') appTitle.innerText = "Dati Brano";
             }
         }
@@ -316,7 +336,7 @@
                 });
                 
                 if (!res.ok) {
-                    console.warn("File non trovato nel branch main. L'API lo creerà al primo salvataggio.");
+                    console.warn("File non trovato. L'API lo creerà al primo salvataggio.");
                     appData = { tracks: [] }; 
                 } else {
                     const data = await res.json();
@@ -343,7 +363,7 @@
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
 
                 const payload = {
-                    message: "Aggiornamento brani da Web App",
+                    message: "Aggiornamento brani (v1.1)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
