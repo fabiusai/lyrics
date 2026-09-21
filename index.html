@@ -103,7 +103,10 @@
 
     <header>
         <button class="small secondary" id="btnBack" style="display:none;" onclick="goBack()">◀ Indietro</button>
-        <span id="appTitle">Lyrics Reader</span>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <span id="appTitle">Lyrics Reader</span>
+            <span style="font-size: 0.7rem; color: #888; font-weight: normal;">v1.1</span>
+        </div>
         <button class="small secondary" id="btnAddTop" style="display:none;" onclick="prepareNewTrack()">➕</button>
     </header>
 
@@ -133,6 +136,9 @@
                 <p id="currentAlbumArtist" style="font-size:1.2rem; color:#aaa;">Artista</p>
             </div>
         </div>
+        
+        <button class="secondary small" onclick="fixAlbumTrackNumbers()" style="margin-bottom: 15px; width: 100%;">🔄 Riordina da iTunes</button>
+        
         <div id="tracksList"></div>
         <button class="danger" onclick="deleteCurrentAlbum()" style="margin-top: 30px;">🗑️ Elimina intero disco</button>
     </div>
@@ -140,13 +146,15 @@
     <!-- VISTA 4: LETTORE TESTO -->
     <div id="readerView" class="view container">
         <h2 id="readerTitle" style="margin-bottom: 5px; font-size:1.6rem;">Titolo</h2>
-        <p id="readerSubtitle" style="margin-bottom: 25px; color:#aaa; font-size:1.2rem;">Artista</p>
-        <div id="lyricsContainer"></div>
+        <p id="readerSubtitle" style="margin-bottom: 15px; color:#aaa; font-size:1.2rem;">Artista</p>
         
-        <div style="display:flex; gap:10px; margin-top:40px;">
-            <button class="secondary" onclick="editCurrentTrack()">✏️ Modifica</button>
-            <button class="danger" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
+        <!-- Pulsanti Spostati in Alto per Immediata Visibilità -->
+        <div style="display:flex; gap:10px; margin-bottom:30px;">
+            <button class="secondary small" onclick="editCurrentTrack()">✏️ Modifica Brano</button>
+            <button class="danger small" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
         </div>
+
+        <div id="lyricsContainer"></div>
     </div>
 
     <!-- VISTA 5: EDITOR / RICERCA -->
@@ -546,6 +554,42 @@
                 });
             } catch (error) {
                 resultsDiv.innerHTML = "Errore durante la ricerca.";
+            }
+        }
+        
+        async function fixAlbumTrackNumbers() {
+            if(!currentAlbumSelection) return;
+            const [album, artist] = currentAlbumSelection.split("|||");
+            
+            if(!confirm("Vuoi cercare automaticamente i numeri di traccia su iTunes per riordinare il disco?")) return;
+            
+            showLoader(true);
+            try {
+                const query = artist + " " + album;
+                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=50`);
+                const data = await res.json();
+                
+                let updated = 0;
+                appData.tracks.forEach(t => {
+                    if(t.album === album && t.artist === artist) {
+                        const itunesMatch = data.results.find(r => r.trackName.toLowerCase().includes(t.title.toLowerCase()) || t.title.toLowerCase().includes(r.trackName.toLowerCase()));
+                        if(itunesMatch && itunesMatch.trackNumber) {
+                            t.trackNum = itunesMatch.trackNumber;
+                            updated++;
+                        }
+                    }
+                });
+                
+                if(updated > 0) {
+                    await saveDataToGitHub();
+                } else {
+                    alert("Nessun nuovo ordine trovato su iTunes per questi brani.");
+                    showLoader(false);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Errore durante la ricerca su iTunes.");
+                showLoader(false);
             }
         }
 
