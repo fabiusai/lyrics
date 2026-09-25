@@ -120,14 +120,14 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.4</span>
+            <span class="app-version">v1.5</span>
         </div>
         <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
 
     <div id="loader">Attendere prego...</div>
 
-    <!-- VISTA 1: LOGIN (Mostrata solo manualmente o se forzata) -->
+    <!-- VISTA 1: LOGIN -->
     <div id="loginView" class="view container">
         <h2>Accesso Autore</h2>
         <p style="margin-top:10px; color:#aaa; font-size:1.1rem;">Inserisci il tuo Personal Access Token per poter modificare il database.</p>
@@ -136,13 +136,12 @@
         <button class="secondary" onclick="goBack()" style="margin-top: 15px;">Annulla</button>
     </div>
 
-    <!-- VISTA 2: LISTA ARTISTI (Home) -->
+    <!-- VISTA 2: LISTA ARTISTI -->
     <div id="homeView" class="view container">
         <button class="admin-only" onclick="prepareNewTrack()" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
         <input type="text" id="localSearchQuery" placeholder="🔍 Cerca artista, disco o brano..." onkeyup="renderHome()">
         <div id="artistsList" style="margin-top: 20px;"></div>
         
-        <!-- Appare solo in modalità lettura -->
         <button class="admin-login-btn" onclick="showView('loginView')">🔒 Accesso Autore (Login)</button>
     </div>
 
@@ -219,7 +218,6 @@
     </div>
 
     <script>
-        // --- CONFIGURAZIONE GITHUB ---
         const GITHUB_REPO_OWNER = "fabiusai"; 
         const GITHUB_REPO_NAME = "lyrics";
         const GITHUB_FILE_PATH = "data.json";
@@ -234,16 +232,13 @@
         let currentAlbumSelection = "";
         let currentTrackSelection = null;
 
-        // --- INIZIALIZZAZIONE & GESTIONE URL ---
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const tokenFromUrl = urlParams.get('token');
             const albumFromUrl = urlParams.get('album');
             
-            // Gestione Token sicuro
             if (tokenFromUrl) {
                 localStorage.setItem('gh_lyrics_token', tokenFromUrl);
-                // Pulisce il token dall'URL ma preserva l'album da condividere se presente
                 let cleanUrl = window.location.pathname;
                 if(albumFromUrl) cleanUrl += '?album=' + encodeURIComponent(albumFromUrl);
                 window.history.replaceState({}, document.title, cleanUrl);
@@ -307,16 +302,12 @@
             } else { alert("Inserisci un token valido."); }
         }
 
-        // --- LETTURA DATI: API (ADMIN) O DIRETTA (AMICI) ---
         async function loadDataFromGitHub(token, albumToOpen = null) {
             showLoader(true);
-            
-            // Attiva la modalità Sola Lettura se non c'è il token
             document.body.classList.toggle('read-only-mode', !token);
             
             try {
                 if (token) {
-                    // Chiamata API (Permette la successiva scrittura)
                     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`, {
                         headers: { 'Authorization': `token ${token}` }
                     });
@@ -329,45 +320,44 @@
                         appData = JSON.parse(decodedContent);
                     }
                 } else {
-                    // Chiamata Diretta Pubblica (Bypass API, ideale per gli amici)
                     const res = await fetch('./data.json?t=' + Date.now());
                     if (res.ok) {
                         appData = await res.json();
                     } else {
-                        console.warn("Database pubblico non trovato. Modalità vuota.");
+                        console.warn("Database pubblico non trovato o non accessibile localmente. Modalità vuota.");
                         appData = { tracks: [] };
                     }
                 }
-                
-                if (!appData.tracks) appData.tracks = [];
-                
-                historyStack = [];
-                showView('homeView');
-                
-                // Se il link conteneva un album condiviso, aprilo subito
-                if (albumToOpen) {
-                    openAlbum(albumToOpen);
-                }
-
             } catch (error) {
-                console.error(error);
+                console.error("Errore di caricamento (normale se eseguito in locale tramite file://):", error);
                 if(token) {
                     alert("Errore di connessione API. Controlla il Token.");
                     localStorage.removeItem('gh_lyrics_token');
                     document.body.classList.add('read-only-mode');
                 }
+                appData = { tracks: [] };
             }
+
+            // SPOSTATO FUORI DAL CATCH: L'interfaccia si attiva sempre
+            if (!appData.tracks) appData.tracks = [];
+            
+            historyStack = [];
+            showView('homeView');
+            
+            if (albumToOpen) {
+                openAlbum(albumToOpen);
+            }
+            
             showLoader(false);
         }
 
-        // --- SALVATAGGIO DATI (SOLO ADMIN) ---
         async function saveDataToGitHub() {
             showLoader(true);
             try {
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.4)",
+                    message: "Aggiornamento brani (v1.5)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -394,7 +384,6 @@
             showLoader(false);
         }
 
-        // --- RENDER HOME (ARTISTI) ---
         function renderHome() {
             const listDiv = document.getElementById('artistsList');
             if(!listDiv) return;
@@ -440,7 +429,6 @@
             if (found === 0) listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun risultato trovato.</p>";
         }
 
-        // --- RENDER ARTISTA (DISCHI) ---
         function openArtist(artistName) {
             currentArtistSelection = artistName;
             document.getElementById('currentArtistName').innerText = artistName;
@@ -494,7 +482,6 @@
             showView('artistView');
         }
 
-        // --- RENDER DISCO E CONDIVISIONE ---
         function openAlbum(albumKey) {
             currentAlbumSelection = albumKey;
             const [albumTitle, albumArtist] = albumKey.split("|||");
@@ -557,7 +544,6 @@
             }
         }
 
-        // --- GESTIONE NOTE ---
         function toggleNote() {
             const noteDiv = document.getElementById('trackNote');
             if(noteDiv.style.display === 'none') {
@@ -567,7 +553,6 @@
             }
         }
 
-        // --- RENDER TESTO BRANO ---
         function openReader(trackId) {
             currentTrackSelection = appData.tracks.find(t => t.id === trackId);
             if(!currentTrackSelection) return;
@@ -578,7 +563,7 @@
 
             const btnNote = document.getElementById('btnToggleNote');
             const divNote = document.getElementById('trackNote');
-            divNote.style.display = 'none'; // Sempre chiusa di default
+            divNote.style.display = 'none'; 
             if (currentTrackSelection.note && currentTrackSelection.note.trim() !== '') {
                 btnNote.style.display = 'block';
                 divNote.innerHTML = currentTrackSelection.note.replace(/\n/g, '<br>');
@@ -610,7 +595,6 @@
             showView('readerView');
         }
 
-        // --- GESTIONE EDITOR (SOLO ADMIN) ---
         function prepareNewTrack() {
             document.getElementById('editId').value = '';
             document.getElementById('editArtist').value = currentArtistSelection || '';
