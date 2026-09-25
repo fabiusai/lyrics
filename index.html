@@ -102,6 +102,7 @@
             align-items: center;
             gap: 15px;
             cursor: pointer;
+            transition: opacity 0.2s;
         }
         .list-item img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; }
         .list-item-info h2 { font-size: 1.4rem; margin-bottom: 5px; }
@@ -120,7 +121,7 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.7</span>
+            <span class="app-version">v1.8</span>
         </div>
         <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
@@ -254,6 +255,8 @@
         let currentAlbumSelection = "";
         let currentTrackSelection = null;
         let currentPlaylistSelection = null;
+        
+        let dragStartIndex = null; // Variabile per tracciare il drag & drop
 
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -378,7 +381,6 @@
             historyStack = [];
             showView('homeView');
             
-            // Priorità di apertura link diretto: Playlist, Album, poi Artista
             if (playlistToOpen) {
                 openPlaylist(playlistToOpen);
             } else if (albumToOpen) {
@@ -396,7 +398,7 @@
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.7)",
+                    message: "Aggiornamento brani (v1.8)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -470,7 +472,7 @@
             if (found === 0) listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun risultato trovato.</p>";
         }
 
-        // --- SEZIONE PLAYLISTS ---
+        // --- SEZIONE PLAYLISTS CON DRAG & DROP ---
 
         function openPlaylists() {
             const listDiv = document.getElementById('playlistsList');
@@ -520,16 +522,55 @@
                     if (track) {
                         const div = document.createElement('div');
                         div.className = 'list-item';
+                        div.draggable = true;
+                        div.dataset.index = index;
                         div.innerHTML = `
+                            <div class="admin-only drag-handle" style="cursor: grab; font-size: 1.5rem; margin-right: 15px; color: #888;" title="Trascina per riordinare">☰</div>
                             <div class="list-item-info" style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
+                                <div onclick="openReader('${track.id}')" style="flex-grow:1; cursor:pointer;">
                                     <h2 style="font-size: 1.3rem;">${index + 1}. ${track.title}</h2>
                                     <p>${track.artist}</p>
                                 </div>
-                                <button class="danger small admin-only" style="width: auto; padding: 10px 15px; margin: 0;" onclick="event.stopPropagation(); removeTrackFromPlaylist('${tId}')">✖</button>
+                                <button class="danger small admin-only" style="width: auto; padding: 10px 15px; margin: 0; margin-left:10px;" onclick="event.stopPropagation(); removeTrackFromPlaylist('${tId}')">✖</button>
                             </div>
                         `;
-                        div.onclick = () => openReader(track.id);
+                        
+                        // Eventi HTML5 Drag and Drop
+                        div.addEventListener('dragstart', function(e) {
+                            dragStartIndex = +this.dataset.index;
+                            this.style.opacity = '0.4';
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/html', this.innerHTML);
+                        });
+
+                        div.addEventListener('dragover', function(e) {
+                            e.preventDefault();
+                            this.style.borderTop = '2px solid var(--accent)';
+                        });
+
+                        div.addEventListener('dragleave', function(e) {
+                            this.style.borderTop = 'none';
+                        });
+
+                        div.addEventListener('dragend', function(e) {
+                            this.style.opacity = '1';
+                            document.querySelectorAll('#playlistTracksList .list-item').forEach(el => el.style.borderTop = 'none');
+                        });
+
+                        div.addEventListener('drop', async function(e) {
+                            e.preventDefault();
+                            this.style.borderTop = 'none';
+                            const dragEndIndex = +this.dataset.index;
+                            
+                            if (dragStartIndex !== null && dragStartIndex !== dragEndIndex) {
+                                // Sposta l'id nell'array e salva
+                                const draggedItem = currentPlaylistSelection.trackIds.splice(dragStartIndex, 1)[0];
+                                currentPlaylistSelection.trackIds.splice(dragEndIndex, 0, draggedItem);
+                                await saveDataToGitHub(false);
+                                openPlaylist(currentPlaylistSelection.id); // Re-renderizza
+                            }
+                        });
+
                         listDiv.appendChild(div);
                     }
                 });
@@ -761,7 +802,7 @@
             document.getElementById('readerTitle').innerText = prefix + currentTrackSelection.title;
             document.getElementById('readerSubtitle').innerText = `${currentTrackSelection.artist} • ${currentTrackSelection.album}`;
 
-            document.getElementById('playlistSelector').style.display = 'none'; // Chiude il selettore se aperto
+            document.getElementById('playlistSelector').style.display = 'none'; 
 
             const btnNote = document.getElementById('btnToggleNote');
             const divNote = document.getElementById('trackNote');
