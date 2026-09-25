@@ -120,7 +120,7 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.6</span>
+            <span class="app-version">v1.7</span>
         </div>
         <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
@@ -136,8 +136,9 @@
         <button class="secondary" onclick="goBack()" style="margin-top: 15px;">Annulla</button>
     </div>
 
-    <!-- VISTA 2: LISTA ARTISTI -->
+    <!-- VISTA 2: LISTA ARTISTI E ACCESSO PLAYLIST (Home) -->
     <div id="homeView" class="view container">
+        <button class="secondary" onclick="openPlaylists()" style="margin-bottom: 20px; background-color: var(--share);">🎵 Le mie Playlists</button>
         <button class="admin-only" onclick="prepareNewTrack()" style="margin-bottom: 20px;">➕ Aggiungi Nuovo Brano</button>
         <input type="text" id="localSearchQuery" placeholder="🔍 Cerca artista, disco o brano..." onkeyup="renderHome()">
         <div id="artistsList" style="margin-top: 20px;"></div>
@@ -145,14 +146,28 @@
         <button class="admin-login-btn" onclick="showView('loginView')">🔒 Accesso Autore (Login)</button>
     </div>
 
-    <!-- VISTA 3: LISTA DISCHI DELL'ARTISTA -->
+    <!-- VISTA 3: LISTA PLAYLISTS -->
+    <div id="playlistsView" class="view container">
+        <button class="admin-only" onclick="createPlaylist()" style="margin-bottom: 20px;">➕ Nuova Playlist</button>
+        <div id="playlistsList"></div>
+    </div>
+
+    <!-- VISTA 4: DETTAGLIO PLAYLIST -->
+    <div id="playlistDetailView" class="view container">
+        <h2 id="currentPlaylistTitle" style="margin-bottom: 10px; font-size:1.8rem; text-align:center;">Playlist</h2>
+        <button class="share small" onclick="sharePlaylist()" style="margin-bottom: 15px; width: 100%;">🔗 Condividi Playlist</button>
+        <div id="playlistTracksList" style="margin-top: 20px;"></div>
+        <button class="danger admin-only" onclick="deleteCurrentPlaylist()" style="margin-top: 30px;">🗑️ Elimina Playlist</button>
+    </div>
+
+    <!-- VISTA 5: LISTA DISCHI DELL'ARTISTA -->
     <div id="artistView" class="view container">
         <h2 id="currentArtistName" style="margin-bottom: 20px; font-size:1.8rem; text-align:center;">Artista</h2>
         <button class="share small" onclick="shareArtist()" style="margin-bottom: 15px; width: 100%;">🔗 Condividi Artista</button>
         <div id="albumsList"></div>
     </div>
 
-    <!-- VISTA 4: LISTA BRANI DEL DISCO -->
+    <!-- VISTA 6: LISTA BRANI DEL DISCO -->
     <div id="albumView" class="view container">
         <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
             <img id="currentAlbumCover" src="" style="width: 100px; height: 100px; border-radius: 8px;">
@@ -169,14 +184,20 @@
         <button class="danger admin-only" onclick="deleteCurrentAlbum()" style="margin-top: 30px;">🗑️ Elimina intero disco</button>
     </div>
 
-    <!-- VISTA 5: LETTORE TESTO -->
+    <!-- VISTA 7: LETTORE TESTO -->
     <div id="readerView" class="view container">
         <h2 id="readerTitle" style="margin-bottom: 5px; font-size:1.6rem;">Titolo</h2>
         <p id="readerSubtitle" style="margin-bottom: 15px; color:#aaa; font-size:1.2rem;">Artista</p>
         
-        <div class="admin-only" style="display:flex; gap:10px; margin-bottom:30px;">
-            <button class="secondary small" style="width: 50%;" onclick="editCurrentTrack()">✏️ Modifica Brano</button>
-            <button class="danger small" style="width: 50%;" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
+        <div class="admin-only" style="display:flex; gap:10px; margin-bottom:10px;">
+            <button class="secondary small" style="width: 33%;" onclick="editCurrentTrack()">✏️ Modifica</button>
+            <button class="secondary small" style="width: 33%;" onclick="togglePlaylistSelector()">➕ Playlist</button>
+            <button class="danger small" style="width: 33%;" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
+        </div>
+
+        <div id="playlistSelector" class="admin-only" style="display:none; background:var(--surface-color); padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #444;">
+            <h3 style="margin-bottom:10px; font-size:1.1rem;">Aggiungi a:</h3>
+            <div id="playlistSelectorList"></div>
         </div>
         
         <button id="btnToggleNote" class="small secondary" style="display:none; margin-bottom:20px; width:100%;" onclick="toggleNote()">ℹ️ Note sulla canzone</button>
@@ -185,7 +206,7 @@
         <div id="lyricsContainer" style="margin-top: 20px;"></div>
     </div>
 
-    <!-- VISTA 6: EDITOR / RICERCA -->
+    <!-- VISTA 8: EDITOR / RICERCA -->
     <div id="editorView" class="view container">
         <h2>Cerca Brano (iTunes)</h2>
         <div style="display: flex; gap: 10px;">
@@ -225,19 +246,21 @@
         const GITHUB_BRANCH = "main";
 
         let currentFileSha = ""; 
-        let appData = { tracks: [] }; 
+        let appData = { tracks: [], playlists: [] }; 
         let githubToken = "";
 
         let historyStack = [];
         let currentArtistSelection = "";
         let currentAlbumSelection = "";
         let currentTrackSelection = null;
+        let currentPlaylistSelection = null;
 
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const tokenFromUrl = urlParams.get('token');
             const albumFromUrl = urlParams.get('album');
             const artistFromUrl = urlParams.get('artist');
+            const playlistFromUrl = urlParams.get('playlist');
             
             if (tokenFromUrl) {
                 localStorage.setItem('gh_lyrics_token', tokenFromUrl);
@@ -245,6 +268,7 @@
                 let params = new URLSearchParams();
                 if(albumFromUrl) params.set('album', albumFromUrl);
                 if(artistFromUrl) params.set('artist', artistFromUrl);
+                if(playlistFromUrl) params.set('playlist', playlistFromUrl);
                 
                 if(params.toString()) {
                     cleanUrl += '?' + params.toString();
@@ -253,7 +277,7 @@
             }
             
             githubToken = localStorage.getItem('gh_lyrics_token');
-            loadDataFromGitHub(githubToken, albumFromUrl, artistFromUrl);
+            loadDataFromGitHub(githubToken, albumFromUrl, artistFromUrl, playlistFromUrl);
         };
 
         function showView(viewId, pushHistory = true) {
@@ -286,6 +310,8 @@
                 if(viewId === 'albumView') appTitle.innerText = "Brani Disco";
                 if(viewId === 'readerView') appTitle.innerText = "Lettura Testo";
                 if(viewId === 'editorView') appTitle.innerText = "Dati Brano";
+                if(viewId === 'playlistsView') appTitle.innerText = "Le mie Playlists";
+                if(viewId === 'playlistDetailView') appTitle.innerText = "Playlist";
             }
         }
 
@@ -310,7 +336,7 @@
             } else { alert("Inserisci un token valido."); }
         }
 
-        async function loadDataFromGitHub(token, albumToOpen = null, artistToOpen = null) {
+        async function loadDataFromGitHub(token, albumToOpen = null, artistToOpen = null, playlistToOpen = null) {
             showLoader(true);
             document.body.classList.toggle('read-only-mode', !token);
             
@@ -320,7 +346,7 @@
                         headers: { 'Authorization': `token ${token}` }
                     });
                     if (!res.ok) {
-                        appData = { tracks: [] }; 
+                        appData = { tracks: [], playlists: [] }; 
                     } else {
                         const data = await res.json();
                         currentFileSha = data.sha;
@@ -333,7 +359,7 @@
                         appData = await res.json();
                     } else {
                         console.warn("Database pubblico non trovato o non accessibile localmente. Modalità vuota.");
-                        appData = { tracks: [] };
+                        appData = { tracks: [], playlists: [] };
                     }
                 }
             } catch (error) {
@@ -343,16 +369,19 @@
                     localStorage.removeItem('gh_lyrics_token');
                     document.body.classList.add('read-only-mode');
                 }
-                appData = { tracks: [] };
+                appData = { tracks: [], playlists: [] };
             }
 
             if (!appData.tracks) appData.tracks = [];
+            if (!appData.playlists) appData.playlists = [];
             
             historyStack = [];
             showView('homeView');
             
-            // Priorità di apertura link diretto: Album prima, poi Artista
-            if (albumToOpen) {
+            // Priorità di apertura link diretto: Playlist, Album, poi Artista
+            if (playlistToOpen) {
+                openPlaylist(playlistToOpen);
+            } else if (albumToOpen) {
                 openAlbum(albumToOpen);
             } else if (artistToOpen) {
                 openArtist(artistToOpen);
@@ -361,13 +390,13 @@
             showLoader(false);
         }
 
-        async function saveDataToGitHub() {
+        async function saveDataToGitHub(redirectHome = true) {
             showLoader(true);
             try {
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.6)",
+                    message: "Aggiornamento brani (v1.7)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -384,8 +413,10 @@
                 if (res.ok) {
                     const data = await res.json();
                     currentFileSha = data.content.sha;
-                    alert("Salvataggio completato!");
-                    showView('homeView');
+                    if (redirectHome) {
+                        alert("Salvataggio completato!");
+                        showView('homeView');
+                    }
                 } else {
                     const errorData = await res.json();
                     throw new Error(errorData.message || "Errore sconosciuto");
@@ -438,6 +469,146 @@
 
             if (found === 0) listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessun risultato trovato.</p>";
         }
+
+        // --- SEZIONE PLAYLISTS ---
+
+        function openPlaylists() {
+            const listDiv = document.getElementById('playlistsList');
+            listDiv.innerHTML = "";
+            
+            if (!appData.playlists || appData.playlists.length === 0) {
+                listDiv.innerHTML = "<p style='text-align:center; margin-top:20px; color:#aaa;'>Nessuna playlist creata.</p>";
+            } else {
+                appData.playlists.forEach(pl => {
+                    const div = document.createElement('div');
+                    div.className = 'list-item';
+                    div.innerHTML = `
+                        <div class="list-item-info">
+                            <h2>${pl.title}</h2>
+                            <p>${pl.trackIds.length} brani</p>
+                        </div>
+                    `;
+                    div.onclick = () => openPlaylist(pl.id);
+                    listDiv.appendChild(div);
+                });
+            }
+            showView('playlistsView');
+        }
+
+        async function createPlaylist() {
+            const title = prompt("Inserisci il nome della nuova Playlist:");
+            if (title && title.trim() !== "") {
+                appData.playlists.push({ id: 'pl_' + Date.now(), title: title.trim(), trackIds: [] });
+                await saveDataToGitHub(false);
+                openPlaylists();
+            }
+        }
+
+        function openPlaylist(plId) {
+            currentPlaylistSelection = appData.playlists.find(p => p.id === plId);
+            if (!currentPlaylistSelection) return;
+
+            document.getElementById('currentPlaylistTitle').innerText = currentPlaylistSelection.title;
+            const listDiv = document.getElementById('playlistTracksList');
+            listDiv.innerHTML = "";
+
+            if (currentPlaylistSelection.trackIds.length === 0) {
+                listDiv.innerHTML = "<p style='text-align:center; color:#aaa; margin-top:20px;'>La playlist è vuota.</p>";
+            } else {
+                currentPlaylistSelection.trackIds.forEach((tId, index) => {
+                    const track = appData.tracks.find(t => t.id === tId);
+                    if (track) {
+                        const div = document.createElement('div');
+                        div.className = 'list-item';
+                        div.innerHTML = `
+                            <div class="list-item-info" style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h2 style="font-size: 1.3rem;">${index + 1}. ${track.title}</h2>
+                                    <p>${track.artist}</p>
+                                </div>
+                                <button class="danger small admin-only" style="width: auto; padding: 10px 15px; margin: 0;" onclick="event.stopPropagation(); removeTrackFromPlaylist('${tId}')">✖</button>
+                            </div>
+                        `;
+                        div.onclick = () => openReader(track.id);
+                        listDiv.appendChild(div);
+                    }
+                });
+            }
+            showView('playlistDetailView');
+        }
+
+        async function removeTrackFromPlaylist(trackId) {
+            if(confirm("Vuoi rimuovere questo brano dalla playlist?")) {
+                currentPlaylistSelection.trackIds = currentPlaylistSelection.trackIds.filter(id => id !== trackId);
+                await saveDataToGitHub(false);
+                openPlaylist(currentPlaylistSelection.id);
+            }
+        }
+
+        async function deleteCurrentPlaylist() {
+            if(confirm("Sei sicuro di voler eliminare l'intera playlist?")) {
+                appData.playlists = appData.playlists.filter(p => p.id !== currentPlaylistSelection.id);
+                await saveDataToGitHub(false);
+                openPlaylists();
+            }
+        }
+
+        function sharePlaylist() {
+            if(!currentPlaylistSelection) return;
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = baseUrl + '?playlist=' + encodeURIComponent(currentPlaylistSelection.id);
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Lyrics Reader Playlist: ' + currentPlaylistSelection.title,
+                    url: shareUrl
+                }).catch(console.error);
+            } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert("Link della playlist copiato!");
+                }).catch(() => {
+                    prompt("Copia questo link per condividere la playlist:", shareUrl);
+                });
+            }
+        }
+
+        function togglePlaylistSelector() {
+            const sel = document.getElementById('playlistSelector');
+            sel.style.display = sel.style.display === 'none' ? 'block' : 'none';
+            if (sel.style.display === 'block') {
+                const list = document.getElementById('playlistSelectorList');
+                list.innerHTML = "";
+                if (!appData.playlists || appData.playlists.length === 0) {
+                    list.innerHTML = "<p style='color:#aaa; font-size:1rem;'>Nessuna playlist esistente. Creane una dalla Home.</p>";
+                } else {
+                    appData.playlists.forEach(pl => {
+                        const btn = document.createElement('button');
+                        btn.className = 'secondary small';
+                        btn.style.margin = "5px 0";
+                        btn.style.textAlign = "left";
+                        btn.innerHTML = `📄 ${pl.title}`;
+                        btn.onclick = () => addCurrentTrackToPlaylist(pl.id);
+                        list.appendChild(btn);
+                    });
+                }
+            }
+        }
+
+        async function addCurrentTrackToPlaylist(playlistId) {
+            const pl = appData.playlists.find(p => p.id === playlistId);
+            if (pl && currentTrackSelection) {
+                if (!pl.trackIds.includes(currentTrackSelection.id)) {
+                    pl.trackIds.push(currentTrackSelection.id);
+                    await saveDataToGitHub(false);
+                    alert("Brano aggiunto a: " + pl.title);
+                    document.getElementById('playlistSelector').style.display = 'none';
+                } else {
+                    alert("Il brano è già presente in questa playlist.");
+                }
+            }
+        }
+
+        // --- FINE SEZIONE PLAYLISTS ---
 
         function openArtist(artistName) {
             currentArtistSelection = artistName;
@@ -534,7 +705,6 @@
             showView('albumView');
         }
 
-        // Funzione per la condivisione dell'intero artista
         function shareArtist() {
             if(!currentArtistSelection) return;
             const baseUrl = window.location.origin + window.location.pathname;
@@ -590,6 +760,8 @@
             const prefix = currentTrackSelection.trackNum ? `${currentTrackSelection.trackNum}. ` : '';
             document.getElementById('readerTitle').innerText = prefix + currentTrackSelection.title;
             document.getElementById('readerSubtitle').innerText = `${currentTrackSelection.artist} • ${currentTrackSelection.album}`;
+
+            document.getElementById('playlistSelector').style.display = 'none'; // Chiude il selettore se aperto
 
             const btnNote = document.getElementById('btnToggleNote');
             const divNote = document.getElementById('trackNote');
@@ -712,7 +884,7 @@
                     }
                 });
                 
-                if(updated > 0) { await saveDataToGitHub(); } 
+                if(updated > 0) { await saveDataToGitHub(false); alert("Disco riordinato."); openAlbum(currentAlbumSelection); } 
                 else { alert("Nessun nuovo ordine trovato."); showLoader(false); }
             } catch (error) { alert("Errore durante la ricerca."); showLoader(false); }
         }
@@ -747,6 +919,10 @@
             if(!currentTrackSelection) return;
             if(confirm("Sei sicuro di voler eliminare questo brano?")) {
                 appData.tracks = appData.tracks.filter(t => t.id !== currentTrackSelection.id);
+                // Rimuove il brano anche da eventuali playlist
+                appData.playlists.forEach(pl => {
+                    pl.trackIds = pl.trackIds.filter(id => id !== currentTrackSelection.id);
+                });
                 saveDataToGitHub();
             }
         }
@@ -755,7 +931,18 @@
             if(!currentAlbumSelection) return;
             if(confirm("Sei sicuro di voler eliminare l'INTERO DISCO?")) {
                 const [album, artist] = currentAlbumSelection.split("|||");
+                
+                // Trova gli id dei brani da eliminare
+                const trackIdsToDelete = appData.tracks.filter(t => t.album === album && t.artist === artist).map(t => t.id);
+                
+                // Elimina i brani dal database
                 appData.tracks = appData.tracks.filter(t => !(t.album === album && t.artist === artist));
+                
+                // Rimuove i brani dalle playlist
+                appData.playlists.forEach(pl => {
+                    pl.trackIds = pl.trackIds.filter(id => !trackIdsToDelete.includes(id));
+                });
+
                 saveDataToGitHub();
             }
         }
