@@ -120,7 +120,7 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.5</span>
+            <span class="app-version">v1.6</span>
         </div>
         <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
@@ -148,6 +148,7 @@
     <!-- VISTA 3: LISTA DISCHI DELL'ARTISTA -->
     <div id="artistView" class="view container">
         <h2 id="currentArtistName" style="margin-bottom: 20px; font-size:1.8rem; text-align:center;">Artista</h2>
+        <button class="share small" onclick="shareArtist()" style="margin-bottom: 15px; width: 100%;">🔗 Condividi Artista</button>
         <div id="albumsList"></div>
     </div>
 
@@ -236,16 +237,23 @@
             const urlParams = new URLSearchParams(window.location.search);
             const tokenFromUrl = urlParams.get('token');
             const albumFromUrl = urlParams.get('album');
+            const artistFromUrl = urlParams.get('artist');
             
             if (tokenFromUrl) {
                 localStorage.setItem('gh_lyrics_token', tokenFromUrl);
                 let cleanUrl = window.location.pathname;
-                if(albumFromUrl) cleanUrl += '?album=' + encodeURIComponent(albumFromUrl);
+                let params = new URLSearchParams();
+                if(albumFromUrl) params.set('album', albumFromUrl);
+                if(artistFromUrl) params.set('artist', artistFromUrl);
+                
+                if(params.toString()) {
+                    cleanUrl += '?' + params.toString();
+                }
                 window.history.replaceState({}, document.title, cleanUrl);
             }
             
             githubToken = localStorage.getItem('gh_lyrics_token');
-            loadDataFromGitHub(githubToken, albumFromUrl);
+            loadDataFromGitHub(githubToken, albumFromUrl, artistFromUrl);
         };
 
         function showView(viewId, pushHistory = true) {
@@ -302,7 +310,7 @@
             } else { alert("Inserisci un token valido."); }
         }
 
-        async function loadDataFromGitHub(token, albumToOpen = null) {
+        async function loadDataFromGitHub(token, albumToOpen = null, artistToOpen = null) {
             showLoader(true);
             document.body.classList.toggle('read-only-mode', !token);
             
@@ -338,14 +346,16 @@
                 appData = { tracks: [] };
             }
 
-            // SPOSTATO FUORI DAL CATCH: L'interfaccia si attiva sempre
             if (!appData.tracks) appData.tracks = [];
             
             historyStack = [];
             showView('homeView');
             
+            // Priorità di apertura link diretto: Album prima, poi Artista
             if (albumToOpen) {
                 openAlbum(albumToOpen);
+            } else if (artistToOpen) {
+                openArtist(artistToOpen);
             }
             
             showLoader(false);
@@ -357,7 +367,7 @@
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.5)",
+                    message: "Aggiornamento brani (v1.6)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -522,6 +532,26 @@
             });
             
             showView('albumView');
+        }
+
+        // Funzione per la condivisione dell'intero artista
+        function shareArtist() {
+            if(!currentArtistSelection) return;
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = baseUrl + '?artist=' + encodeURIComponent(currentArtistSelection);
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Lyrics Reader: ' + currentArtistSelection,
+                    url: shareUrl
+                }).catch(console.error);
+            } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert("Link copiato! Ora puoi incollarlo su WhatsApp o dove preferisci.");
+                }).catch(() => {
+                    prompt("Copia questo link:", shareUrl);
+                });
+            }
         }
 
         function shareAlbum() {
