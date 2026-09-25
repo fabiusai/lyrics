@@ -120,7 +120,7 @@
         <button class="small secondary" id="btnBack" style="display:none; width: 80px;" onclick="goBack()">◀ Indietro</button>
         <div class="header-title-container">
             <span id="appTitle">Lyrics Reader</span>
-            <span class="app-version">v1.3</span>
+            <span class="app-version">v1.4</span>
         </div>
         <button class="small secondary admin-only" id="btnAddTop" style="display:none; width: 80px;" onclick="prepareNewTrack()">➕ Nuovo</button>
     </header>
@@ -179,6 +179,9 @@
             <button class="danger small" style="width: 50%;" onclick="deleteCurrentTrack()">🗑️ Elimina</button>
         </div>
         
+        <button id="btnToggleNote" class="small secondary" style="display:none; margin-bottom:20px; width:100%;" onclick="toggleNote()">ℹ️ Note sulla canzone</button>
+        <div id="trackNote" style="display:none; background:var(--surface-color); border-left: 4px solid var(--accent); padding:15px; margin-bottom:20px; border-radius:4px; font-size:1.1rem; line-height:1.4;"></div>
+
         <div id="lyricsContainer" style="margin-top: 20px;"></div>
     </div>
 
@@ -205,6 +208,8 @@
         </div>
         
         <input type="text" id="editCover" placeholder="URL Copertina (opzionale)">
+        <textarea id="editNote" placeholder="Note descrittive della canzone (opzionale)..." style="min-height: 80px; margin-top: 10px;"></textarea>
+
         <h2 style="margin-top:20px;">Testo Inglese</h2>
         <textarea id="editEn" placeholder="Incolla qui il testo originale riga per riga..."></textarea>
         <h2 style="margin-top:20px;">Traduzione Italiana</h2>
@@ -362,7 +367,7 @@
                 const jsonString = JSON.stringify(appData, null, 2);
                 const contentEncoded = btoa(unescape(encodeURIComponent(jsonString)));
                 const payload = {
-                    message: "Aggiornamento brani (v1.3)",
+                    message: "Aggiornamento brani (v1.4)",
                     content: contentEncoded,
                     branch: GITHUB_BRANCH
                 };
@@ -552,6 +557,16 @@
             }
         }
 
+        // --- GESTIONE NOTE ---
+        function toggleNote() {
+            const noteDiv = document.getElementById('trackNote');
+            if(noteDiv.style.display === 'none') {
+                noteDiv.style.display = 'block';
+            } else {
+                noteDiv.style.display = 'none';
+            }
+        }
+
         // --- RENDER TESTO BRANO ---
         function openReader(trackId) {
             currentTrackSelection = appData.tracks.find(t => t.id === trackId);
@@ -560,6 +575,17 @@
             const prefix = currentTrackSelection.trackNum ? `${currentTrackSelection.trackNum}. ` : '';
             document.getElementById('readerTitle').innerText = prefix + currentTrackSelection.title;
             document.getElementById('readerSubtitle').innerText = `${currentTrackSelection.artist} • ${currentTrackSelection.album}`;
+
+            const btnNote = document.getElementById('btnToggleNote');
+            const divNote = document.getElementById('trackNote');
+            divNote.style.display = 'none'; // Sempre chiusa di default
+            if (currentTrackSelection.note && currentTrackSelection.note.trim() !== '') {
+                btnNote.style.display = 'block';
+                divNote.innerHTML = currentTrackSelection.note.replace(/\n/g, '<br>');
+            } else {
+                btnNote.style.display = 'none';
+                divNote.innerHTML = '';
+            }
 
             const container = document.getElementById('lyricsContainer');
             container.innerHTML = "";
@@ -593,6 +619,7 @@
             document.getElementById('editTrackNum').value = '';
             document.getElementById('editYear').value = '';
             document.getElementById('editCover').value = '';
+            document.getElementById('editNote').value = '';
             document.getElementById('editEn').value = '';
             document.getElementById('editIt').value = '';
             document.getElementById('searchQuery').value = '';
@@ -609,6 +636,7 @@
             document.getElementById('editTrackNum').value = currentTrackSelection.trackNum || '';
             document.getElementById('editYear').value = currentTrackSelection.year || '';
             document.getElementById('editCover').value = currentTrackSelection.cover || '';
+            document.getElementById('editNote').value = currentTrackSelection.note || '';
             document.getElementById('editEn').value = currentTrackSelection.en;
             document.getElementById('editIt').value = currentTrackSelection.it;
             document.getElementById('searchQuery').value = '';
@@ -683,6 +711,7 @@
             const trackNum = document.getElementById('editTrackNum').value.trim();
             const year = document.getElementById('editYear').value.trim();
             const cover = document.getElementById('editCover').value.trim();
+            const note = document.getElementById('editNote').value.trim();
             const en = document.getElementById('editEn').value;
             const it = document.getElementById('editIt').value;
 
@@ -693,9 +722,9 @@
 
             if (id) {
                 const idx = appData.tracks.findIndex(t => t.id === id);
-                if (idx !== -1) appData.tracks[idx] = { id, artist, album, title, trackNum, year, cover, en, it };
+                if (idx !== -1) appData.tracks[idx] = { id, artist, album, title, trackNum, year, cover, note, en, it };
             } else {
-                appData.tracks.push({ id: Date.now().toString(), artist, album, title, trackNum, year, cover, en, it });
+                appData.tracks.push({ id: Date.now().toString(), artist, album, title, trackNum, year, cover, note, en, it });
             }
             saveDataToGitHub();
         }
